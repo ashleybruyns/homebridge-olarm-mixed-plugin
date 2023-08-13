@@ -62,15 +62,16 @@ export class Olarm {
   }
 
   setArea = async (area: OlarmArea, action: OlarmAreaAction) => {
-    const response = await fetch(`https://apiv4.olarm.co/api/v4/devices/${area.deviceId}/actions`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        'actionCmd': action,
-        'actionNum': area.areaNumber,
-      }),
-    });
-    const result = await response.text();
+    this.log.info('Response: <not set>');
+    //const response = await fetch(`https://apiv4.olarm.co/api/v4/devices/${area.deviceId}/actions`, {
+    //  method: 'POST',
+    //  headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+    //  body: JSON.stringify({
+    //    'actionCmd': action,
+    //    'actionNum': area.areaNumber,
+    //  }),
+    //});
+    //const result = await response.text();
     // this.log.info('Response:', result);
   }
 }
