@@ -11,8 +11,8 @@ This plugin creates a HomeKit interface for an [Olarm](https://olarm.co) alarm s
 2. Set up the new platform in your Homebridge config.json
 ```
 {
-  "platform": "OlarmHomebridgePlugin",
-  "name": "homebridge-olarm-plugin",
+  "platform": "OlarmHomebridgeMixedPlugin",
+  "name": "homebridge-olarm-mixed-plugin",
   "apiKey": "<YOUR OLARM API KEY>"
 }
 ```
@@ -49,8 +49,8 @@ _Note: YMMV with setup guides below_
 3. Update the Homebridge `config.json` with this platform:
 ```
 {
-  "platform": "OlarmHomebridgePlugin",
-  "name": "homebridge-olarm-plugin",
+  "platform": "OlarmHomebridgeMixedPlugin",
+  "name": "homebridge-olarm-mixed-plugin",
   "apiKey": "<use your olarm api key>"
 }
 ```

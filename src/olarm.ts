@@ -6,6 +6,9 @@ export interface OlarmArea {
   deviceId: string;
   areaNumber: number;
   areaState: OlarmAreaState;
+  deviceTimestamp: number;
+  zones: string[];
+  zonesStamp: number[];
 }
 
 export enum OlarmAreaState {
@@ -47,13 +50,18 @@ export class Olarm {
     let olarmAreas: OlarmArea[] = [];
     // Loop through all devices on the account and strip out their areas
     rawDevices.forEach((d: any) => {
+      // this.log.info('Zone info - 24: ' + d.deviceState.zones[23]);
+      
       // For each area in each device, add them
       d.deviceProfile.areasLabels.forEach((l: string, i: number) => {
         olarmAreas.push({
           areaName: l,
           areaState: d.deviceState.areas[i],
           areaNumber: i + 1,
-          deviceId: d.deviceId
+          deviceId: d.deviceId,
+          deviceTimestamp: d.deviceTimestamp, 
+          zones: d.deviceState.zones,
+          zonesStamp: d.deviceState.zonesStamp
         });
       });
     });
@@ -63,15 +71,16 @@ export class Olarm {
 
   setArea = async (area: OlarmArea, action: OlarmAreaAction) => {
     this.log.info('Response: <not set>');
-    //const response = await fetch(`https://apiv4.olarm.co/api/v4/devices/${area.deviceId}/actions`, {
-    //  method: 'POST',
-    //  headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-    //  body: JSON.stringify({
-    //    'actionCmd': action,
-    //    'actionNum': area.areaNumber,
-    //  }),
-    //});
-    //const result = await response.text();
-    // this.log.info('Response:', result);
+    const response = await fetch(`https://apiv4.olarm.co/api/v4/devices/${area.deviceId}/actions`, {
+     method: 'POST',
+     headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+     body: JSON.stringify({
+       'actionCmd': action,
+       'actionNum': area.areaNumber,
+     }),
+    });
+    const result = await response.text();
+    this.log.info('Response:', result);
   }
+
 }

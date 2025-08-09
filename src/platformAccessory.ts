@@ -13,6 +13,8 @@ export class OlarmAreaPlatformAccessory {
   private service: Service;
   private currentState: OlarmAreaState = OlarmAreaState.Disarmed;
   private targetState: OlarmAreaState = OlarmAreaState.Disarmed;
+  private motionSensorOneService: Service;
+  private currentOlarmAreaState!: OlarmArea;
 
   constructor(
     private readonly platform: OlarmHomebridgePlatform,
@@ -58,18 +60,28 @@ export class OlarmAreaPlatformAccessory {
     //  * the `updateCharacteristic` method.
     //  *
     //  */
-    // let motionDetected = false;
-    // setInterval(() => {
+    this.motionSensorOneService = this.accessory.getService(this.platform.Service.OccupancySensor) || this.accessory.addService(this.platform.Service.OccupancySensor);
+      // set the service name, this is what is displayed as the default name on the Home app
+    // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
+    this.motionSensorOneService.setCharacteristic(this.platform.Characteristic.Name, "Study PIR");
+
+    // let motionDetected = this.platform.Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED;
+    // setInterval(() => {     
     //   // EXAMPLE - inverse the trigger
-    //   motionDetected = !motionDetected;
+    //   motionDetected = (motionDetected == this.platform.Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED) ? this.platform.Characteristic.OccupancyDetected.OCCUPANCY_DETECTED : this.platform.Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED;
 
     //   // push the new value to HomeKit
-    //   motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-    //   motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
+    //   this.motionSensorOneService.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, motionDetected);
+    //   // motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
 
     //   this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
     //   this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    // }, 10000);
+    // }, this.platform.config.pollingInterval);
+
+    // setInterval(async () => {
+      setInterval(() => {
+      this.getOccupancyZones();
+    }, this.platform.config.pollingInterval);
   }
 
   convertFromOlarmAreaState = (s: OlarmAreaState): CharacteristicValue => {
@@ -119,6 +131,22 @@ export class OlarmAreaPlatformAccessory {
     }
   };
 
+  // Validate if PIR Zone has triggered based on configured occupancy delay time
+  convertFromOlarmZoneOccupancy = (zone: number, olarmArea: OlarmArea): CharacteristicValue => {
+
+    // Check zone timestamp vs device timestamp against polling interval
+    this.platform.log.debug('Zone Occupancy check for zone: ' + zone + ' ZoneStamp: ' + olarmArea.zonesStamp[zone - 1] + ' DeviceStamp: ' + olarmArea.deviceTimestamp)
+    const differenceInMs = olarmArea.deviceTimestamp - olarmArea.zonesStamp[zone - 1];
+    if (differenceInMs < this.platform.config.occupancyDelay) {
+      this.platform.log.info(`GET ZoneState for Zone ` + zone + ' Set to OCCUPANCY_DETECTED');
+      return this.platform.Characteristic.OccupancyDetected.OCCUPANCY_DETECTED;
+    }
+    else {
+      this.platform.log.info(`GET ZoneState for Zone ` + zone + ' Set to OCCUPANCY_NOT_DETECTED');
+      return this.platform.Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED;
+    }
+  };
+
   /**
      * Handle requests to get the current value of the "Security System Current State" characteristic
      */
@@ -126,6 +154,8 @@ export class OlarmAreaPlatformAccessory {
     const olarmAreas = await this.platform.olarm.getAreas();
     const area = this.accessory.context.area as OlarmArea;
     const olarmArea = olarmAreas.find(oa => oa.areaName === area.areaName);
+
+    this.currentOlarmAreaState = olarmArea!;
 
     this.platform.log.info(`GET CurrentState (${olarmArea?.areaName}) from ${this.currentState} to ${olarmArea!.areaState} (target: ${this.targetState})`);
     this.currentState = olarmArea!.areaState;
@@ -176,4 +206,20 @@ export class OlarmAreaPlatformAccessory {
     this.service.updateCharacteristic(this.platform.Characteristic.SecuritySystemCurrentState, this.convertFromOlarmAreaState(this.currentState));
     this.service.updateCharacteristic(this.platform.Characteristic.SecuritySystemTargetState, this.convertFromOlarmAreaState(this.targetState));
   }
+
+  // private async getOccupancyZones(): Promise<void> {
+    private async getOccupancyZones() {
+      await this.handleSecuritySystemCurrentStateGet();
+
+      //const olarmAreas = await this.platform.olarm.getAreas();
+      // const area = this.accessory.context.area as OlarmArea;
+      // const olarmArea = olarmAreas.find(oa => oa.areaName === area.areaName)!;
+
+      // Check zone7 for now
+      let motionDetected = this.convertFromOlarmZoneOccupancy(7, this.currentOlarmAreaState);
+
+      // push the new value to HomeKit
+      this.motionSensorOneService.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, motionDetected);
+  }
+
 }

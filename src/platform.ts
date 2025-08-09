@@ -86,7 +86,8 @@ export class OlarmHomebridgePlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new OlarmAreaPlatformAccessory(this, existingAccessory);
+        let olarmInstance = new OlarmAreaPlatformAccessory(this, existingAccessory);
+        // olarmInstance.initialize();
 
       } else {
         // the accessory does not yet exist, so we need to create it
@@ -101,7 +102,8 @@ export class OlarmHomebridgePlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        new OlarmAreaPlatformAccessory(this, accessory);
+        let olarmInstance = new OlarmAreaPlatformAccessory(this, accessory);
+        // olarmInstance.initialize();
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);

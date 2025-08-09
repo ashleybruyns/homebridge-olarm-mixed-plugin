@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "OlarmHomebridgePlugin",
+  "pluginAlias": "OlarmHomebridgeMixedPlugin",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -15,6 +15,30 @@
         "type": "string",
         "title": "API Key",
         "description": "The API key from your Olarm account. This is obtained at https://user.olarm.co/#/api."
+      },
+      "pollingInterval": {
+        "type": "number",
+        "title": "Polling Interval",
+        "description": "Polling Interval for Occupancy Sensors in milliseconds",
+        "default": 30000
+      },
+      "occupancyDelay": {
+        "type": "number",
+        "title": "Occupancy Delay",
+        "description": "Occupancy Delay for Occupancy Sensors in milliseconds",
+        "default": 300000
+      },
+      "occupancyZones": {
+        "type": "array",
+        "title": "Occupancy zones",
+        "description": "Active Occupancy Sensors / Zones",
+        "items": {
+          "type": "object",
+          "properties": {
+            "number": { "type": "number" }
+          },
+          "required": [ "number" ]
+        }
       }
     }
   }
