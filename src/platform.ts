@@ -59,12 +59,19 @@ export class OlarmHomebridgePlatform implements DynamicPlatformPlugin {
     const olarmAreas = await this.olarm.getAreas();
 
     this.log.info(`Retrieved areas from Olarm: ${olarmAreas.map(a => a.areaName).join(', ')}`);
+    this.log.info(`Ignored areas from config: ${this.config.ignoreAreas.join(', ')}`);
 
     let accessoryUUIDsToUnregister = this.accessories.map(a => a.UUID);
 
     // loop over the discovered devices and register each one if it has not already been registered
     for (const area of olarmAreas) {
-
+      // Alarm areas to ignore based non config
+      this.log.info(`Checking area ${area.areaNumber.toString()}`);
+      if (this.config.ignoreAreas.includes(area.areaNumber)) {
+        this.log.info(`Area ${area.areaName} - Area # ${area.areaNumber.toString()} excluded as per ignore list`);
+        continue;
+      }
+      
       // Generate a unique id for the area
       const uuid = this.api.hap.uuid.generate(area.deviceId + area.areaNumber);
 

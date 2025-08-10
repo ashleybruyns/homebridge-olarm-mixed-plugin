@@ -40,6 +40,8 @@ export class Olarm {
    * @returns Promise<OlarmArea[]>
    */
   getAreas = async (): Promise<OlarmArea[]> => {
+    this.log.debug(`Query olarm API`);
+
     const response = await fetch('https://apiv4.olarm.co/api/v4/devices', {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${this.apiKey}` },

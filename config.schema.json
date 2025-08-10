@@ -28,15 +28,21 @@
         "description": "Occupancy Delay for Occupancy Sensors in milliseconds",
         "default": 300000
       },
+      "ignoreAreas": {
+        "type": "array",
+        "title": "Areas to Ignore",
+        "description": "Alarm areas to ignore",
+        "items": {
+          "type": "number",
+          "required": [ "number" ]
+        }
+      },
       "occupancyZones": {
         "type": "array",
         "title": "Occupancy zones",
         "description": "Active Occupancy Sensors / Zones",
         "items": {
-          "type": "object",
-          "properties": {
-            "number": { "type": "number" }
-          },
+          "type": "number",
           "required": [ "number" ]
         }
       }
