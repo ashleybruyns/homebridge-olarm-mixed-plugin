@@ -26,6 +26,18 @@ export enum OlarmAreaAction {
   Disarm = 'area-disarm',
 }
 
+export enum OlarmPGMCommand {
+  Open = "pgm-open",
+  Close = "pgm-close",
+  Pulse = 'pgm-pulse'
+}
+
+export enum OlarmZoneState {
+  Active = "a",
+  Closed = "c",
+  Bypassed = "b"
+}
+
 export class Olarm {
   private readonly apiKey: string;
   public readonly log: Logger;
@@ -40,7 +52,7 @@ export class Olarm {
    * @returns Promise<OlarmArea[]>
    */
   getAreas = async (): Promise<OlarmArea[]> => {
-    this.log.debug(`Query olarm API`);
+    this.log.debug(`Query Olarm API`);
 
     const response = await fetch('https://apiv4.olarm.co/api/v4/devices', {
       method: 'GET',
@@ -79,6 +91,20 @@ export class Olarm {
      body: JSON.stringify({
        'actionCmd': action,
        'actionNum': area.areaNumber,
+     }),
+    });
+    const result = await response.text();
+    this.log.info('Response:', result);
+  }
+
+  setPGM = async (area: OlarmArea, pgmNumber: number, command: OlarmPGMCommand) => {
+    this.log.info('Response: <not set>');
+    const response = await fetch(`https://apiv4.olarm.co/api/v4/devices/${area.deviceId}/actions`, {
+     method: 'POST',
+     headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+     body: JSON.stringify({
+       'actionCmd': command,
+       'actionNum': pgmNumber,
      }),
     });
     const result = await response.text();

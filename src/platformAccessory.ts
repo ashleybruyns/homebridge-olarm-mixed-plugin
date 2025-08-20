@@ -1,8 +1,21 @@
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { Service, PlatformAccessory, CharacteristicValue, Characteristic, API } from 'homebridge';
 
 import { OlarmHomebridgePlatform } from './platform';
-import { Olarm, OlarmArea, OlarmAreaState } from './olarm';
+import { Olarm, OlarmArea, OlarmAreaState, OlarmPGMCommand, OlarmZoneState } from './olarm';
 import { OlarmAreaAction } from './olarm';
+
+enum CurrentDoorState {
+  OPEN = 0,
+  CLOSED = 1,
+  OPENING = 2,
+  CLOSING = 3,
+  STOPPED = 4,
+};
+
+enum TargetDoorState {
+  OPEN = 0,
+  CLOSED = 1
+};
 
 /**
  * Platform Accessory
@@ -11,11 +24,14 @@ import { OlarmAreaAction } from './olarm';
  */
 export class OlarmAreaPlatformAccessory {
   private service: Service;
+  private garageService!: Service;
   private currentState: OlarmAreaState = OlarmAreaState.Disarmed;
   private targetState: OlarmAreaState = OlarmAreaState.Disarmed;
   // private motionSensorOneService: Service;
   private currentOlarmAreaState!: OlarmArea;
-
+  private currentDoorState: CurrentDoorState = CurrentDoorState.CLOSED;
+  private timeoutHandle: any;
+    
   constructor(
     private readonly platform: OlarmHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
@@ -27,7 +43,6 @@ export class OlarmAreaPlatformAccessory {
 
     // get the SecuritySystem service if it exists, otherwise create a new SecuritySystem service
     // you can create multiple services for each accessory
-
     this.service = this.accessory.getService(this.platform.Service.SecuritySystem) || this.accessory.addService(this.platform.Service.SecuritySystem);
 
     // set the service name, this is what is displayed as the default name on the Home app
@@ -46,10 +61,36 @@ export class OlarmAreaPlatformAccessory {
       .onGet(this.handleSecuritySystemTargetStateGet.bind(this))
       .onSet(this.handleSecuritySystemTargetStateSet.bind(this));
 
-
     // Initialize the states
     this.currentState = this.accessory.context.area.areaState;
     this.targetState = this.currentState;
+
+    if (this.platform.config.garageDoor.zone && this.platform.config.garageDoor.zone !== undefined &&
+      this.platform.config.garageDoor.PGM && this.platform.config.garageDoor.PGM !== undefined)
+    {
+      this.platform.log.info(`Add garage door sensor for zone: ${this.platform.config.garageDoor.zone.toString()}`);
+      
+      // get the GarageDoor System service if it exists, otherwise create a new GarageDoorOpener service
+      // you can create multiple services for each accessory
+      this.garageService = this.accessory.getService(this.platform.Service.GarageDoorOpener) || this.accessory.addService(this.platform.Service.GarageDoorOpener);
+
+      // set the service name, this is what is displayed as the default name on the Home app
+      // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
+      this.garageService.setCharacteristic(this.platform.Characteristic.Name, this.accessory.context.area.areaName + " Garage Door");
+      this.garageService.updateCharacteristic(this.platform.Characteristic.CurrentDoorState, this.platform.Characteristic.CurrentDoorState.CLOSED);
+      this.garageService.updateCharacteristic(this.platform.Characteristic.TargetDoorState, this.platform.Characteristic.TargetDoorState.CLOSED);
+
+      // each service must implement at-minimum the "required characteristics" for the given service type
+      // see https://developers.homebridge.io/#/service/GarageDoorOpener
+
+      // register handlers for the SecuritySystemCurrentState Characteristic
+      this.garageService.getCharacteristic(this.platform.Characteristic.CurrentDoorState)
+        .onGet(this.handleGarageDoorCurrentStateGet.bind(this));
+
+      // register handlers for the SecuritySystemTargetState Characteristic
+      this.garageService.getCharacteristic(this.platform.Characteristic.TargetDoorState)
+        .onSet(this.handleGarageDoorTargetStateSet.bind(this));      
+    }
 
     // Initialize occupancy sensors
     // Loop through all configured PIR zones and create an occupancy sensor for each one 
@@ -135,6 +176,26 @@ export class OlarmAreaPlatformAccessory {
     }
   };
 
+  convertFromOlarmZoneToCurrentDoorState = (s: string): CurrentDoorState => {
+
+    /**
+     * APPLE  OLARM
+     * c (closed) = Closed
+     * a (active) = Open
+     * b (bypassed) = closed
+     */
+    switch (s) {
+      case OlarmZoneState.Active:
+        return CurrentDoorState.OPEN;
+      case OlarmZoneState.Closed:
+        return CurrentDoorState.CLOSED;
+      case OlarmZoneState.Bypassed:
+        return CurrentDoorState.CLOSED;
+      default:
+        return CurrentDoorState.CLOSED;
+    }
+  };
+
   /**
      * Handle requests to get the current value of the "Security System Current State" characteristic
      */
@@ -205,53 +266,111 @@ export class OlarmAreaPlatformAccessory {
     this.service.updateCharacteristic(this.platform.Characteristic.SecuritySystemTargetState, this.convertFromOlarmAreaState(this.targetState));
   }
 
-  // private async getOccupancyZones(): Promise<void> {
-    private async getOccupancyZones() {
-      this.platform.log.debug(`Get Occupancy zones for configured zones`);
+  async getOccupancyZones() {
+    this.platform.log.debug(`Get Occupancy zones for configured zones`);
       
-      // Schedule security event, refreshing alarm data
-      await this.handleSecuritySystemCurrentStateGet();
+    // Schedule security event, refreshing alarm data
+    await this.handleSecuritySystemCurrentStateGet();
+    await this.handleGarageDoorCurrentStateGet();
 
-      //const olarmAreas = await this.platform.olarm.getAreas();
-      // const area = this.accessory.context.area as OlarmArea;
-      // const olarmArea = olarmAreas.find(oa => oa.areaName === area.areaName)!;
-
-      this.platform.config.occupancyZones.forEach((zone: number) => {
-        this.platform.log.debug(`Get occupancy sensor for zone: ${zone.toString()}`);
-        // let occupancySensorService = this.accessory.addService(this.platform.Service.OccupancySensor);
-        
-        // let occupancyService = this.accessory.getService(`Zone ${zone.toString()} Sensor`);
-        this.accessory.getService(`Zone ${zone.toString()} Sensor`)!.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, this.convertFromOlarmZoneOccupancy(zone, this.currentOlarmAreaState));
-        // this.platform.log.debug(`Occupancy sensor: ${occupancyService!.name} Zone#: ${zone.toString()}`);
-
-        // let motionDetected = this.convertFromOlarmZoneOccupancy(zone, this.currentOlarmAreaState);
-        // occupancyService!.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, motionDetected);
-  
-        // occupancySensorService.setCharacteristic(this.platform.Characteristic.Name, "Zone" + zone);
-        // occupancySensorService.updateCharacteristic(this.platform.Characteristic.Name, "Zone" + zone);
-        // push the new value to HomeKit
-        // occupancySensorService.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, );
-        
-        // this.platform.log.debug(`Occupancy sensor: "Zone ${zone.toString()} Sensor" / "${this.accessory.context.area.areaName}-Zone${zone.toString()}Sensor" added`);
-      });
-
-      // Check occupancy for all configured zones
-      // this.occupancySensors.forEach((occupancyService: Service) => {
-      //   this.platform.log.debug(`Check occupancy for ${occupancyService.name} Zone# ${occupancyService.name?.slice(4 - occupancyService.name.length)}`);
-      //   // Check zone occupancy changes
-      //   let currentZone = Number(occupancyService.name?.slice(4 - occupancyService.name.length));
-      //   let motionDetected = this.convertFromOlarmZoneOccupancy(currentZone, this.currentOlarmAreaState);
-      //   occupancyService.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, motionDetected);
-
-      // // push the new value to HomeKit
-      // // this.motionSensorOneService.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, motionDetected);    
-      // })
-
-      // Check zone7 for now
-      // let motionDetected = this.convertFromOlarmZoneOccupancy(7, this.currentOlarmAreaState);
-
-      // push the new value to HomeKit
-      // this.motionSensorOneService.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, motionDetected);
+    this.platform.config.occupancyZones.forEach((zone: number) => {
+      this.platform.log.debug(`Get occupancy sensor for zone: ${zone.toString()}`);
+      this.accessory.getService(`Zone ${zone.toString()} Sensor`)!.updateCharacteristic(this.platform.Characteristic.OccupancyDetected, this.convertFromOlarmZoneOccupancy(zone, this.currentOlarmAreaState));
+    });
   }
+
+  /**
+   * Handle requests to get the current value of the "Security System Target State" characteristic
+   */
+  async handleGarageDoorCurrentStateGet() {
+    this.platform.log.info(`GET Current Garage Door state for zone ${this.platform.config.garageDoor.zone}`);
+
+    let queryDoorState = this.convertFromOlarmZoneToCurrentDoorState(this.currentOlarmAreaState?.zones[this.platform.config.garageDoor.zone - 1] ?? this.platform.Characteristic.CurrentDoorState.CLOSED);
+        
+    switch (this.currentDoorState) {
+      case CurrentDoorState.OPEN:
+      case CurrentDoorState.CLOSED:        
+        this.setCurrentAndTargetDoorState(queryDoorState);
+        this.platform.log.info(`Current Garage Door state for zone ${this.platform.config.garageDoor.zone} is set to ${ CurrentDoorState[Number(queryDoorState)]}`);
+        return queryDoorState;
+      case CurrentDoorState.OPENING:
+      case CurrentDoorState.CLOSING:
+        this.platform.log.debug(`Current Garage Door state for zone ${this.platform.config.garageDoor.zone} is set to ${ CurrentDoorState[Number(this.currentDoorState)]}`);
+        // if status has not changed in more than 1 min update current state and target state
+        if (this.currentOlarmAreaState?.zonesStamp[this.platform.config.garageDoor.zone - 1] + 60000 < Date.now()) { 
+          this.setCurrentAndTargetDoorState(queryDoorState);
+          this.platform.log.info(`Current Garage Door state for zone ${this.platform.config.garageDoor.zone} is set to ${ CurrentDoorState[Number(this.currentDoorState)]}`);
+        }
+        else {
+          return this.currentDoorState;  
+        }
+      default:
+        return this.currentDoorState;
+    }
+  }
+
+  readonly setCurrentDoorState = (state: CurrentDoorState) => {
+    this.platform.log.debug('Setting current door state to ' + CurrentDoorState[state]);
+    this.currentDoorState = state;
+    this.garageService
+        .getCharacteristic(this.platform.Characteristic.CurrentDoorState)
+        .setValue(state);
+  };
+
+  readonly setCurrentAndTargetDoorState = (state: CurrentDoorState) => {
+    this.platform.log.debug('Setting current door and target state to ' + CurrentDoorState[state]);
+    this.currentDoorState = state;
+    this.garageService
+        .getCharacteristic(this.platform.Characteristic.CurrentDoorState)
+        .setValue(state);
+    this.garageService
+        .getCharacteristic(this.platform.Characteristic.TargetDoorState)
+        .setValue(state);
+  };
+
+  /**
+   * Handle requests to set the "Security System Target State" characteristic
+   */
+  async handleGarageDoorTargetStateSet(targetState: CharacteristicValue) {   
+    // let targetState = Number(value);
+    this.platform.log.debug('Target State set to ' + TargetDoorState[Number(targetState)]);
+    switch (this.currentDoorState) {
+      case CurrentDoorState.OPEN:
+          if (targetState == TargetDoorState.CLOSED) {
+              this.sendRemotePulseSignal();
+              this.currentDoorState = CurrentDoorState.CLOSING;
+              this.timeoutHandle = setTimeout(() => this.setCurrentDoorState(CurrentDoorState.CLOSED), this.platform.config.garageDoor.doorDelay);
+          }
+          break;
+      case CurrentDoorState.CLOSED:          
+          if (targetState == TargetDoorState.OPEN) {
+              this.sendRemotePulseSignal();
+              this.setCurrentDoorState(CurrentDoorState.OPENING);
+              this.timeoutHandle = setTimeout(() => this.setCurrentDoorState(CurrentDoorState.OPEN), this.platform.config.garageDoor.doorDelay);
+          }
+          break;
+      case CurrentDoorState.OPENING:
+      case CurrentDoorState.CLOSING:
+          if (this.currentDoorState === CurrentDoorState.OPENING && targetState == TargetDoorState.CLOSED
+              || this.currentDoorState === CurrentDoorState.CLOSING && targetState == TargetDoorState.OPEN) {
+              clearTimeout(this.timeoutHandle);
+              if (this.currentDoorState === CurrentDoorState.OPENING) {
+                  this.setCurrentDoorState(CurrentDoorState.CLOSING);
+              } else {
+                  this.setCurrentDoorState(CurrentDoorState.OPENING);
+              }
+          }
+          break;
+      case CurrentDoorState.STOPPED:
+          break;
+  }
+  }
+
+  async sendRemotePulseSignal() {
+    // Ping olarm to update
+    this.platform.log.info(`Send remote pulse signal via PGM Zone: ${this.platform.config.garageDoor.PGM}`);
+    await this.platform.olarm.setPGM(this.currentOlarmAreaState, this.platform.config.garageDoor.PGM, OlarmPGMCommand.Pulse);    
+}
+
 
 }
